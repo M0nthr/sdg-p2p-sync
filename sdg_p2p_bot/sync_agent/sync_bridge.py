@@ -35,9 +35,8 @@ def filter_outliers(prices):
     n = len(prices)
     mid = n // 2
     median = prices[mid] if n % 2 != 0 else (prices[mid - 1] + prices[mid]) / 2.0
-    devs = sorted([abs(p - median) for p in prices])
-    mad = devs[mid] if n % 2 != 0 else (devs[mid - 1] + devs[mid]) / 2.0
-    band = 2.5 * (mad if mad > 50 else 100)
+    # Wide tolerance threshold: only filter out extreme prices deviating by 500 SDG or more
+    band = 500.0
     filtered = [p for p in prices if abs(p - median) <= band]
     return filtered if filtered else prices
 
@@ -62,21 +61,31 @@ def fetch_binance_sdg(trade_type):
             items = data.get("data", [])
             prices = []
             merchants = set()
+            ads = []
             for item in items:
                 adv = item.get("adv", {})
                 advertiser = item.get("advertiser", {})
+                adv_no = str(adv.get("advNo", ""))
                 p = float(adv.get("price", 0))
                 surplus = float(adv.get("surplusAmount", 0))
-                nick = advertiser.get("nickName")
+                nick = advertiser.get("nickName", "")
                 if p >= 8000 and surplus >= 10:
-                    prices.push(p) if hasattr(prices, 'push') else prices.append(p)
+                    prices.append(p)
                     if nick:
                         merchants.add(nick)
-            print(f"[+] Binance {trade_type}: Fetched {len(prices)} prices from {len(merchants)} merchants.")
-            return filter_outliers(prices), merchants
+                    if adv_no:
+                        ads.append({
+                            "advNo": adv_no,
+                            "price": p,
+                            "surplus": surplus,
+                            "nick": nick,
+                            "type": "شراء" if trade_type == "BUY" else "بيع"
+                        })
+            print(f"[+] Binance {trade_type}: Fetched {len(prices)} prices from {len(merchants)} merchants, {len(ads)} active ads tracked.")
+            return filter_outliers(prices), merchants, ads
     except Exception as e:
         print(f"[-] Error fetching Binance {trade_type}: {e}")
-        return [], set()
+        return [], set(), []
 
 def fetch_alsoug():
     url = "https://www.alsoug.com/currency"
@@ -147,12 +156,13 @@ def main():
     print("🚀 Starting Binance P2P Sync to Cloudflare Worker...")
     print("=" * 60)
 
-    buy_prices, buy_merchants = fetch_binance_sdg("BUY")
-    sell_prices, sell_merchants = fetch_binance_sdg("SELL")
+    buy_prices, buy_merchants, buy_ads = fetch_binance_sdg("BUY")
+    sell_prices, sell_merchants, sell_ads = fetch_binance_sdg("SELL")
     alsoug_rate = fetch_alsoug()
     fiat_rates = fetch_fiat_rates()
 
     all_merchants = buy_merchants.union(sell_merchants)
+    all_ads = buy_ads + sell_ads
 
     if buy_prices and sell_prices:
         buy_avg = sum(buy_prices) / len(buy_prices)
@@ -176,6 +186,7 @@ def main():
         print(f"  • Buy Average     : {b_avg:,} SDG (Min: {sdg_data['buy_min']:,} | Max: {sdg_data['buy_max']:,})")
         print(f"  • Sell Average    : {s_avg:,} SDG (Min: {sdg_data['sell_min']:,} | Max: {sdg_data['sell_max']:,})")
         print(f"  • Active Traders  : {sdg_data['traders_count']} merchants")
+        print(f"  • Tracked Ads     : {len(all_ads)} active advertisements")
         alsoug_disp = f"{int(alsoug_rate):,} SDG" if alsoug_rate > 0 else "غير متوفر"
         print(f"  • Alsoug Rate     : {alsoug_disp}\n")
     else:
@@ -185,7 +196,8 @@ def main():
     payload = {
         "sdg_data": sdg_data,
         "alsoug_usd": alsoug_rate,
-        "fiat_rates": fiat_rates
+        "fiat_rates": fiat_rates,
+        "ads": all_ads
     }
 
     print("[*] Syncing data to Cloudflare Worker...")
