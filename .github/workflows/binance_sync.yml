@@ -1,0 +1,23 @@
+name: Binance P2P Cloud Sync
+
+on:
+  schedule:
+    # يعمل تلقائياً كل 5 دقائق في السحاب
+    - cron: '*/5 * * * *'
+  workflow_dispatch: # يتيح لك تشغيله يدوياً بضغطة زر للتجربة
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Fetch Binance P2P and Sync to Cloudflare
+        run: python sdg_p2p_bot/sync_agent/sync_bridge.py
