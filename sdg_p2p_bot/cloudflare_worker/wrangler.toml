@@ -1,0 +1,10 @@
+name = "sdg-p2p-bot"
+main = "worker.js"
+compatibility_date = "2024-05-01"
+
+[triggers]
+crons = ["* * * * *"]
+
+[[kv_namespaces]]
+binding = "PRICES_KV"
+id = "0c11e84ab2684c7195d9f27475df56b4"
