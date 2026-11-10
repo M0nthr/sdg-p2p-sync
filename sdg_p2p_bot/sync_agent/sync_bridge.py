@@ -52,8 +52,12 @@ def fetch_binance_sdg(trade_type):
     prices = []
     merchants = set()
     ads = []
+    top_price = None
+    stop = False
 
-    for page in range(1, 15):
+    for page in range(1, 10):
+        if stop:
+            break
         payload = json.dumps({
             "asset": "USDT",
             "fiat": "SDG",
@@ -79,18 +83,26 @@ def fetch_binance_sdg(trade_type):
                     p = float(adv.get("price", 0))
                     surplus = float(adv.get("surplusAmount", 0))
                     nick = advertiser.get("nickName", "")
-                    if p > 0 and surplus >= 5:
-                        prices.append(p)
-                        if nick:
-                            merchants.add(nick)
-                        if adv_no:
-                            ads.append({
-                                "advNo": adv_no,
-                                "price": p,
-                                "surplus": surplus,
-                                "nick": nick,
-                                "type": "شراء" if trade_type == "BUY" else "بيع"
-                            })
+                    if p <= 0 or surplus < 5:
+                        continue
+                    if top_price is None:
+                        top_price = p
+                    # Follow the dynamic wave: stop if price drops/rises by > 8% from top competitive market price
+                    if abs(p - top_price) / top_price > 0.08:
+                        stop = True
+                        break
+
+                    prices.append(p)
+                    if nick:
+                        merchants.add(nick)
+                    if adv_no:
+                        ads.append({
+                            "advNo": adv_no,
+                            "price": p,
+                            "surplus": surplus,
+                            "nick": nick,
+                            "type": "شراء" if trade_type == "BUY" else "بيع"
+                        })
         except Exception as e:
             print(f"[-] Error fetching Binance {trade_type} page {page}: {e}")
             break
