@@ -29,63 +29,74 @@ BINANCE_HEADERS = {
 TOP_CURRENCIES = ["SAR", "AED", "QAR", "KWD", "OMR", "BHD", "EGP", "EUR", "GBP", "TRY"]
 
 def filter_outliers(prices):
-    if not prices:
-        return []
-    prices.sort()
-    n = len(prices)
+    if not prices or len(prices) < 3:
+        return prices
+    sorted_p = sorted(prices)
+    n = len(sorted_p)
     mid = n // 2
-    median = prices[mid] if n % 2 != 0 else (prices[mid - 1] + prices[mid]) / 2.0
-    # Wide tolerance threshold: only filter out extreme prices deviating by 500 SDG or more
-    band = 500.0
-    filtered = [p for p in prices if abs(p - median) <= band]
-    return filtered if filtered else prices
+    med = sorted_p[mid] if n % 2 != 0 else (sorted_p[mid - 1] + sorted_p[mid]) / 2.0
+    
+    diffs = sorted([abs(p - med) for p in sorted_p])
+    mad = diffs[mid] if n % 2 != 0 else (diffs[mid - 1] + diffs[mid]) / 2.0
+    
+    if mad == 0:
+        band = 0.05 * med
+    else:
+        band = 2.5 * (mad if mad > 50 else 100)
+        
+    filtered = [p for p in sorted_p if abs(p - med) <= band]
+    return filtered if filtered else sorted_p
 
 def fetch_binance_sdg(trade_type):
     url = "https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search"
-    payload = json.dumps({
-        "asset": "USDT",
-        "fiat": "SDG",
-        "tradeType": trade_type,
-        "page": 1,
-        "rows": 30,
-        "payTypes": []
-    }).encode("utf-8")
-    
-    req = urllib.request.Request(url, data=payload, headers=BINANCE_HEADERS, method="POST")
-    try:
-        with urllib.request.urlopen(req, timeout=15) as res:
-            if res.status != 200:
-                print(f"[-] Binance {trade_type} returned status {res.status}")
-                return [], set()
-            data = json.loads(res.read().decode("utf-8"))
-            items = data.get("data", [])
-            prices = []
-            merchants = set()
-            ads = []
-            for item in items:
-                adv = item.get("adv", {})
-                advertiser = item.get("advertiser", {})
-                adv_no = str(adv.get("advNo", ""))
-                p = float(adv.get("price", 0))
-                surplus = float(adv.get("surplusAmount", 0))
-                nick = advertiser.get("nickName", "")
-                if p >= 8000 and surplus >= 10:
-                    prices.append(p)
-                    if nick:
-                        merchants.add(nick)
-                    if adv_no:
-                        ads.append({
-                            "advNo": adv_no,
-                            "price": p,
-                            "surplus": surplus,
-                            "nick": nick,
-                            "type": "شراء" if trade_type == "BUY" else "بيع"
-                        })
-            print(f"[+] Binance {trade_type}: Fetched {len(prices)} prices from {len(merchants)} merchants, {len(ads)} active ads tracked.")
-            return filter_outliers(prices), merchants, ads
-    except Exception as e:
-        print(f"[-] Error fetching Binance {trade_type}: {e}")
-        return [], set(), []
+    prices = []
+    merchants = set()
+    ads = []
+
+    for page in range(1, 15):
+        payload = json.dumps({
+            "asset": "USDT",
+            "fiat": "SDG",
+            "tradeType": trade_type,
+            "page": page,
+            "rows": 20,
+            "payTypes": []
+        }).encode("utf-8")
+        
+        req = urllib.request.Request(url, data=payload, headers=BINANCE_HEADERS, method="POST")
+        try:
+            with urllib.request.urlopen(req, timeout=12) as res:
+                if res.status != 200:
+                    break
+                data = json.loads(res.read().decode("utf-8"))
+                items = data.get("data", [])
+                if not items:
+                    break
+                for item in items:
+                    adv = item.get("adv", {})
+                    advertiser = item.get("advertiser", {})
+                    adv_no = str(adv.get("advNo", ""))
+                    p = float(adv.get("price", 0))
+                    surplus = float(adv.get("surplusAmount", 0))
+                    nick = advertiser.get("nickName", "")
+                    if p >= 8000 and surplus >= 10:
+                        prices.append(p)
+                        if nick:
+                            merchants.add(nick)
+                        if adv_no:
+                            ads.append({
+                                "advNo": adv_no,
+                                "price": p,
+                                "surplus": surplus,
+                                "nick": nick,
+                                "type": "شراء" if trade_type == "BUY" else "بيع"
+                            })
+        except Exception as e:
+            print(f"[-] Error fetching Binance {trade_type} page {page}: {e}")
+            break
+
+    print(f"[+] Binance {trade_type}: Fetched {len(prices)} prices from {len(merchants)} merchants, {len(ads)} active ads tracked.")
+    return filter_outliers(prices), merchants, ads
 
 def fetch_alsoug():
     url = "https://www.alsoug.com/currency"
