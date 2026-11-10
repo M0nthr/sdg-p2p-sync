@@ -79,7 +79,7 @@ def fetch_binance_sdg(trade_type):
                     p = float(adv.get("price", 0))
                     surplus = float(adv.get("surplusAmount", 0))
                     nick = advertiser.get("nickName", "")
-                    if p >= 8000 and surplus >= 10:
+                    if p > 0 and surplus >= 5:
                         prices.append(p)
                         if nick:
                             merchants.add(nick)
