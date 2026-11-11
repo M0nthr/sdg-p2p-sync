@@ -96,12 +96,20 @@ def fetch_binance_sdg(trade_type):
                     if nick:
                         merchants.add(nick)
                     if adv_no:
+                        user_no = str(advertiser.get("userNo") or "")
+                        month_orders = int(advertiser.get("monthOrderCount") or 0)
+                        min_qty = float(adv.get("minSingleTransQuantity") or 0)
+                        max_qty = float(adv.get("maxSingleTransQuantity") or 0)
                         ads.append({
                             "advNo": adv_no,
+                            "userNo": user_no,
                             "price": p,
                             "surplus": surplus,
                             "nick": nick,
-                            "type": "شراء" if trade_type == "BUY" else "بيع"
+                            "type": "شراء" if trade_type == "BUY" else "بيع",
+                            "monthOrders": month_orders,
+                            "minQty": min_qty,
+                            "maxQty": max_qty
                         })
         except Exception as e:
             print(f"[-] Error fetching Binance {trade_type} page {page}: {e}")
@@ -220,7 +228,12 @@ def main():
         "sdg_data": sdg_data,
         "alsoug_usd": alsoug_rate,
         "fiat_rates": fiat_rates,
-        "ads": all_ads
+        "ads": all_ads,
+        "benchmarks": {
+            "7d": 10100,
+            "30d": 8050,
+            "1y": 3750
+        }
     }
 
     print("[*] Syncing data to Cloudflare Worker...")
