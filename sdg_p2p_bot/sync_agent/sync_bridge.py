@@ -98,8 +98,21 @@ def fetch_binance_sdg(trade_type):
                     if adv_no:
                         user_no = str(advertiser.get("userNo") or "")
                         month_orders = int(advertiser.get("monthOrderCount") or 0)
+                        total_orders = int(advertiser.get("orderCount") or 0) if advertiser.get("orderCount") is not None else None
+                        m_rate = advertiser.get("monthFinishRate")
+                        finish_rate = float(m_rate) if (m_rate is not None and str(m_rate).strip() != "") else None
+                        sec = advertiser.get("activeTimeInSecond")
+                        active_time = int(sec) if (sec is not None and str(sec).strip() != "") else None
+                        positive_rate = float(advertiser.get("positiveRate") or 1.0)
                         min_qty = float(adv.get("minSingleTransQuantity") or 0)
                         max_qty = float(adv.get("maxSingleTransQuantity") or 0)
+                        min_amount = float(adv.get("minSingleTransAmount") or 0)
+                        max_amount = float(adv.get("dynamicMaxSingleTransAmount") or adv.get("maxSingleTransAmount") or 0)
+                        pay_methods = [
+                            tm.get("identifier") or tm.get("tradeMethodName")
+                            for tm in adv.get("tradeMethods", [])
+                            if (tm.get("identifier") or tm.get("tradeMethodName"))
+                        ]
                         ads.append({
                             "advNo": adv_no,
                             "userNo": user_no,
@@ -107,9 +120,17 @@ def fetch_binance_sdg(trade_type):
                             "surplus": surplus,
                             "nick": nick,
                             "type": "شراء" if trade_type == "BUY" else "بيع",
+                            "tradeType": trade_type,
                             "monthOrders": month_orders,
+                            "totalOrders": total_orders,
+                            "finishRate": finish_rate,
+                            "activeTimeInSecond": active_time,
+                            "positiveRate": positive_rate,
                             "minQty": min_qty,
-                            "maxQty": max_qty
+                            "maxQty": max_qty,
+                            "minAmount": min_amount,
+                            "maxAmount": max_amount,
+                            "payMethods": pay_methods
                         })
         except Exception as e:
             print(f"[-] Error fetching Binance {trade_type} page {page}: {e}")
